@@ -4,3 +4,5 @@
     (print ok)
     (print err)))
 (test :a)
+(test :c.d)
+(test :c)
