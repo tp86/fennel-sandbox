@@ -1,9 +1,13 @@
 (local fennel (require :fennel))
 
+(local loader-makers
+  {:fnl (fn [filename]
+         (partial fennel.dofile filename nil))})
+
 (local config
-  {:a {:root "./libs" :path "?.fnl"}
-   :b {:root "./libs/b-version" :path "src/?.fnl"}
-   :c {:root "./libs/c-mapped" :path "?:init.fnl;src/?/init.fnl;src/?:.fnl"}})
+  {:a {:root "./libs" :path "?.fnl" :loader :fnl}
+   :b {:root "./libs/b-version" :path "src/?.fnl" :loader :fnl}
+   :c {:root "./libs/c-mapped" :path "?:init.fnl;src/?/init.fnl;src/?:.fnl" :loader :fnl}})
 
 (local [dirsep pathsep substpat]
   (icollect [line (package.config:gmatch "([^\n]+)")]
@@ -23,8 +27,9 @@
 
 (fn searcher [modname]
   (case (. config (modname:match "^([^.]+)"))
-    {: root : path}
-    (let [tried []
+    {: root : path : loader}
+    (let [make-loader (assert (. loader-makers loader) ":loader should be one of :lua, :c or :fnl")
+          tried []
           filename (accumulate [filename nil
                                 path (path:gmatch (: "[^%s]+" :format (escape pathsep)))
                                 &until filename]
@@ -35,7 +40,7 @@
                        ?filename))]
       (if filename
         (values
-          (partial fennel.dofile filename nil)
+          (make-loader filename)
           filename)
         (let [tried-files (table.concat tried "\n\t")]
           (if (< _VERSION "Lua 5.4")
