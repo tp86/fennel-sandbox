@@ -5,16 +5,20 @@
     {:root root :path path :loader loader}))
 
 (local config-filename ".root-path")
-(local searcher-config (fennel.dofile config-filename
-                                      {:env {:/f (make-rooted-path :fnl)
-                                             :/l (make-rooted-path :lua)
-                                             :/c (make-rooted-path :c)
-                                             :/m (make-rooted-path :macro)}}))
+(local config-env
+  (doto (collect [name value (pairs _ENV)]
+          name value)
+    (tset :/f (make-rooted-path :fnl))
+    (tset :/l (make-rooted-path :lua))
+    (tset :/c (make-rooted-path :c))
+    (tset :/m (make-rooted-path :macro))))
+(local config (fennel.dofile config-filename {:env config-env}))
 
 (local loader-makers
   {:fnl (fn [filename]
           (partial fennel.dofile filename nil))
-   :lua package.loadfile
+   :lua (fn [filename]
+          (partial loadfile filename))
    :c (fn [filename modname]
         (let [func-modname (-> modname
                                (: :match "^([^-]+)%-?.*") ; get module up to first hyphen (excluding)
@@ -24,7 +28,7 @@
    :macro (fn [filename]
             (partial fennel.dofile filename {:env :_COMPILER}))})
 
-(each [package-name config (pairs searcher-config)]
+(each [package-name config (pairs config)]
   (assert (< 0 (length config)) (: "root-path configuration for %s empty" :format package-name))
   (each [_ path-config (ipairs config)]
     (fn make-message [format-str]
@@ -34,9 +38,17 @@
       (assert (= :string (type path)) (make-message "invalid path of %s for %s"))
       (assert (. loader-makers loader) (make-message "invalid loader type of %s for %s")))))
 
-;; TODO add macro searchers (split config, install new macro-searcher)
-
-;; TODO tests
+(local runtime-config [])
+(local macro-config [])
+(fn into-config [config-table package-name path-config]
+  (when (not (. config-table package-name))
+    (tset config-table package-name []))
+  (table.insert (. config-table package-name) path-config))
+(each [package-name config (pairs config)]
+  (each [_ {: loader &as path-config} (ipairs config)]
+    (if (= loader :macro)
+      (into-config macro-config package-name path-config)
+      (into-config runtime-config package-name path-config))))
 
 (local [dirsep pathsep substpat]
   (icollect [line (package.config:gmatch "([^\n]+)")]
@@ -69,24 +81,28 @@
 
 (local package-pattern "^([^.]+)") ; get first module component (up to and excluding first dot)
 
-(fn searcher [modname]
-  (let [module-config (. searcher-config (modname:match package-pattern))]
-    (when module-config
-      (let [tried-files []
-            (filename make-loader) (accumulate [(filename make-loader) (values nil nil)
-                                                _ {: root : path : loader} (ipairs module-config)
-                                                &until filename]
-                                      (let [make-loader (. loader-makers loader)
-                                            ?filename (find-in-path root path modname tried-files)]
-                                        (values ?filename make-loader)))]
-        (if filename
-          (values
-            (make-loader filename modname)
-            filename)
-          (when (< 0 (length tried-files))
-            (let [tried-files (table.concat tried-files "\n\t")]
-              (if (< _VERSION "Lua 5.4")
-                (.. "\n\t" tried-files)
-                tried-files))))))))
+(fn make-searcher [config-table]
+  (fn [modname]
+    (let [module-config (. config-table (modname:match package-pattern))]
+      (when module-config
+        (let [tried-files []
+              (filename make-loader) (accumulate [(filename make-loader) (values nil nil)
+                                                  _ {: root : path : loader} (ipairs module-config)
+                                                  &until filename]
+                                        (let [make-loader (. loader-makers loader)
+                                              ?filename (find-in-path root path modname tried-files)]
+                                          (values ?filename make-loader)))]
+          (if filename
+            (values
+              (make-loader filename modname)
+              filename)
+            (when (< 0 (length tried-files))
+              (let [tried-files (table.concat tried-files "\n\t")]
+                (if (< _VERSION "Lua 5.4")
+                  (.. "\n\t" tried-files)
+                  tried-files)))))))))
 
-(table.insert (or package.loaders package.searchers) searcher)
+(table.insert (or package.loaders package.searchers) (make-searcher runtime-config))
+(table.insert fennel.macro-searchers (make-searcher macro-config))
+
+;; TODO tests

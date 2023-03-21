@@ -6,3 +6,8 @@
 (test :a)
 (test :c.d)
 (test :c)
+(test :lfs)
+(test :lu)
+(import-macros {: id
+                : d} :mac.test)
+(print (d 2))

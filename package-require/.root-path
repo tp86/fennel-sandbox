@@ -1,3 +1,9 @@
+(local fennel (require :fennel))
+(print (fennel.view (icollect [i n (ipairs [1 2 3 4])]
+                      n)))
 {:a [(/f "./libs" "?.fnl")]
  :b [(/f "./libs/b-version" "src/?.fnl")]
- :c [(/f "./libs/c-mapped" "?:init.fnl;src/?/init.fnl;src/?:.fnl")]}
+ :c [(/f "./libs/c-mapped" "?:init.fnl;src/?/init.fnl;src/?:.fnl")]
+ :lfs [(/c "./libs/luafilesystem" "?.so")]
+ :lu [(/l "./libs" "luaunit.lua")]
+ :mac [(/m "./libs" "?-macros.fnl")]}
