@@ -1,5 +1,3 @@
-(local {:make-fennel-rooted-path /f} (require :searcher))
-
 {:a [(/f "./libs" "?.fnl")]
  :b [(/f "./libs/b-version" "src/?.fnl")]
  :c [(/f "./libs/c-mapped" "?:init.fnl;src/?/init.fnl;src/?:.fnl")]}
